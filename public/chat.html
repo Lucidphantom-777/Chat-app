@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DarkNet Chat — Encrypted Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--bg2:#0f0f0f;--bg3:#141414;--bg4:#1a1a1a;
+  --green:#00ff00;--green2:#00cc00;--green3:#007700;--green-dim:#003300;
+  --blue:#0088ff;--blue2:#0066cc;
+  --red:#ff0000;--red2:#cc0000;
+  --yellow:#ffff00;--yellow2:#cccc00;
+  --text:#ccffcc;--text2:#88aa88;--text3:#446644;
+  --border:rgba(0,255,0,0.2);--border-hi:rgba(0,255,0,0.6);
+  --glow:0 0 8px rgba(0,255,0,0.4);--glow-hi:0 0 16px rgba(0,255,0,0.7);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:14px}
+
+/* Matrix rain canvas */
+#matrix-canvas{position:fixed;top:0;left:0;width:100%;height:100%;opacity:0.04;pointer-events:none;z-index:0}
+
+/* Scanlines */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);
+  pointer-events:none;z-index:999;
+}
+
+/* Layout */
+#app{position:relative;z-index:1;display:flex;height:100vh;max-width:1400px;margin:0 auto}
+
+/* Sidebar */
+#sidebar{
+  width:260px;min-width:260px;
+  background:var(--bg2);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:0;
+}
+.sidebar-header{
+  padding:16px;
+  border-bottom:1px solid var(--border);
+}
+.logo{font-family:'Orbitron',monospace;font-size:13px;font-weight:900;color:var(--green);letter-spacing:2px;text-shadow:var(--glow)}
+.room-code-label{font-size:10px;color:var(--text3);margin-top:8px;letter-spacing:1px}
+#room-code-display{
+  font-size:11px;color:var(--green);letter-spacing:1px;
+  margin-top:4px;word-break:break-all;cursor:pointer;
+  transition:text-shadow .2s;
+}
+#room-code-display:hover{text-shadow:var(--glow-hi)}
+.copy-hint{font-size:9px;color:var(--text3);margin-top:2px}
+
+.section-label{font-size:9px;color:var(--text3);letter-spacing:2px;padding:12px 16px 6px;text-transform:uppercase}
+
+#members-list{flex:0 0 auto;overflow-y:auto;max-height:180px;padding:0 8px}
+.member-item{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 8px;border-radius:3px;
+  font-size:12px;color:var(--text2);
+  transition:background .15s;
+}
+.member-item.self{color:var(--green)}
+.member-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 4px var(--green);flex-shrink:0}
+.member-dot.call{background:var(--blue);box-shadow:0 0 4px var(--blue)}
+
+/* Crypto status */
+#crypto-status{
+  margin:8px 16px;padding:8px;
+  border:1px solid var(--green3);
+  background:rgba(0,255,0,0.03);
+  border-radius:2px;font-size:10px;
+}
+.cs-row{display:flex;justify-content:space-between;margin-bottom:3px;color:var(--text2)}
+.cs-row span.ok{color:var(--green)}
+.cs-row span.warn{color:var(--yellow)}
+
+/* Action buttons */
+.sidebar-actions{padding:8px;display:flex;flex-direction:column;gap:6px}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:10px 14px;border:1px solid;border-radius:2px;
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:1px;
+  background:transparent;
+}
+.btn-green{border-color:var(--green3);color:var(--green)}
+.btn-green:hover{background:rgba(0,255,0,0.08);border-color:var(--green);box-shadow:var(--glow)}
+.btn-blue{border-color:rgba(0,136,255,0.3);color:var(--blue)}
+.btn-blue:hover{background:rgba(0,136,255,0.08);border-color:var(--blue);box-shadow:0 0 8px rgba(0,136,255,0.4)}
+.btn-red{border-color:rgba(255,0,0,0.3);color:var(--red)}
+.btn-red:hover{background:rgba(255,0,0,0.08);border-color:var(--red);box-shadow:0 0 8px rgba(255,0,0,0.4)}
+.btn-yellow{border-color:rgba(255,255,0,0.3);color:var(--yellow)}
+.btn-yellow:hover{background:rgba(255,255,0,0.08);border-color:var(--yellow)}
+
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
+.my-codename-label{font-size:9px;color:var(--text3);letter-spacing:1px}
+#my-codename{font-size:13px;color:var(--green);margin-top:2px;text-shadow:var(--glow)}
+#my-session{font-size:9px;color:var(--text3);margin-top:2px}
+
+/* Main chat area */
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* Chat header */
+#chat-header{
+  padding:12px 20px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg2);flex-shrink:0;
+}
+.header-title{font-family:'Orbitron',monospace;font-size:14px;color:var(--green);letter-spacing:3px}
+.header-meta{font-size:10px;color:var(--text3)}
+.enc-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 8px;border:1px solid var(--green3);
+  border-radius:2px;font-size:10px;color:var(--green);
+  background:rgba(0,255,0,0.05);
+}
+
+/* Messages */
+#messages{
+  flex:1;overflow-y:auto;
+  padding:12px 20px;
+  display:flex;flex-direction:column;gap:6px;
+  scroll-behavior:smooth;
+}
+#messages::-webkit-scrollbar{width:4px}
+#messages::-webkit-scrollbar-track{background:var(--bg)}
+#messages::-webkit-scrollbar-thumb{background:var(--green3);border-radius:2px}
+
+.msg{animation:fadeIn .2s ease;max-width:100%}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.msg-system{
+  text-align:center;font-size:11px;color:var(--text3);
+  padding:2px 0;font-style:italic;
+}
+.msg-system .sys-icon{color:var(--text3);margin-right:4px}
+
+.msg-bubble{display:flex;flex-direction:column;gap:2px}
+.msg-header{display:flex;align-items:baseline;gap:8px}
+.msg-name{font-size:11px;font-weight:700;color:var(--green)}
+.msg-name.self{color:var(--blue)}
+.msg-time{font-size:10px;color:var(--text3)}
+.msg-enc-badge{
+  font-size:9px;padding:1px 5px;
+  border:1px solid var(--green3);border-radius:1px;
+  color:var(--green3);margin-left:auto;
+}
+.msg-enc-badge.tampered{border-color:var(--red);color:var(--red)}
+.msg-text{
+  font-size:13px;color:var(--text);line-height:1.5;
+  background:var(--bg3);
+  border-left:2px solid var(--green3);
+  padding:6px 10px;border-radius:0 3px 3px 0;
+  word-break:break-word;white-space:pre-wrap;
+}
+.msg-text.self-text{border-left-color:var(--blue2)}
+.msg-text.tampered-text{
+  border-left-color:var(--red);color:var(--red);
+  background:rgba(255,0,0,0.05);
+}
+
+/* Input area */
+#input-area{
+  padding:12px 20px;
+  border-top:1px solid var(--border);
+  background:var(--bg2);flex-shrink:0;
+}
+.input-row{display:flex;gap:8px;align-items:flex-end}
+#msg-input{
+  flex:1;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:2px;
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:13px;
+  padding:10px 14px;
+  resize:none;
+  min-height:44px;max-height:120px;
+  transition:border-color .15s,box-shadow .15s;
+  outline:none;
+}
+#msg-input:focus{border-color:var(--green);box-shadow:var(--glow)}
+#msg-input::placeholder{color:var(--text3)}
+#send-btn{
+  padding:10px 18px;min-width:80px;
+  font-size:12px;align-self:stretch;
+}
+.input-status{
+  font-size:10px;color:var(--text3);margin-top:6px;
+  display:flex;align-items:center;gap:12px;
+}
+.char-count{color:var(--text3)}
+.char-count.warn{color:var(--yellow)}
+
+/* Call bar */
+#call-bar{
+  display:none;
+  background:rgba(0,136,255,0.08);
+  border-top:1px solid rgba(0,136,255,0.3);
+  padding:10px 20px;
+  align-items:center;gap:12px;
+  flex-shrink:0;
+}
+#call-bar.active{display:flex}
+.call-status{font-size:12px;color:var(--blue);flex:1}
+.call-timer{font-family:'Orbitron',monospace;font-size:14px;color:var(--blue)}
+.vol-bar{display:flex;gap:2px;align-items:flex-end;height:20px}
+.vol-seg{width:3px;background:var(--blue2);border-radius:1px;transition:height .1s}
+audio{display:none}
+
+/* ── Modals ─────────────────────────────────────────────── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.85);z-index:1000;
+  align-items:center;justify-content:center;
+  backdrop-filter:blur(2px);
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:var(--bg2);
+  border:1px solid var(--border-hi);
+  border-radius:3px;padding:28px 32px;
+  min-width:340px;max-width:480px;width:90%;
+  box-shadow:0 0 40px rgba(0,255,0,0.15);
+  animation:modalIn .2s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.modal.modal-red{border-color:rgba(255,0,0,0.6);box-shadow:0 0 40px rgba(255,0,0,0.15)}
+.modal.modal-yellow{border-color:rgba(255,255,0,0.4);box-shadow:0 0 40px rgba(255,255,0,0.1)}
+.modal h2{font-family:'Orbitron',monospace;font-size:16px;margin-bottom:4px;letter-spacing:2px}
+.modal h2.green{color:var(--green)}
+.modal h2.red{color:var(--red)}
+.modal h2.yellow{color:var(--yellow)}
+.modal p{font-size:12px;color:var(--text2);margin-bottom:20px;line-height:1.6}
+.modal-input{
+  width:100%;background:var(--bg3);border:1px solid var(--border);
+  border-radius:2px;color:var(--text);font-family:'Share Tech Mono',monospace;
+  font-size:13px;padding:10px 14px;outline:none;margin-bottom:12px;
+  transition:border-color .15s;
+}
+.modal-input:focus{border-color:var(--green)}
+.modal-input.red:focus{border-color:var(--red)}
+textarea.modal-input{resize:vertical;min-height:80px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.modal-btn{
+  padding:9px 20px;border:1px solid;border-radius:2px;
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  cursor:pointer;background:transparent;letter-spacing:1px;
+  text-transform:uppercase;transition:all .15s;
+}
+.modal-btn.green{border-color:var(--green3);color:var(--green)}
+.modal-btn.green:hover{background:rgba(0,255,0,0.08);border-color:var(--green)}
+.modal-btn.red{border-color:rgba(255,0,0,0.4);color:var(--red)}
+.modal-btn.red:hover{background:rgba(255,0,0,0.08);border-color:var(--red)}
+.modal-btn.grey{border-color:var(--border);color:var(--text2)}
+.modal-btn.grey:hover{border-color:var(--text2)}
+
+/* Admin panel */
+#admin-panel{max-width:600px}
+.admin-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+.admin-table th{color:var(--text3);border-bottom:1px solid var(--border);padding:6px 8px;text-align:left}
+.admin-table td{padding:6px 8px;border-bottom:1px solid rgba(0,255,0,0.05);color:var(--text2)}
+.admin-table .reviewed{opacity:.4}
+.badge-open{color:var(--yellow);font-size:10px}
+.badge-done{color:var(--green3);font-size:10px}
+.resolve-btn{
+  font-size:10px;padding:2px 8px;cursor:pointer;
+  border:1px solid var(--green3);background:transparent;color:var(--green);
+  font-family:'Share Tech Mono',monospace;border-radius:1px;
+  transition:all .15s;
+}
+.resolve-btn:hover{background:rgba(0,255,0,0.08)}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:24px;right:24px;z-index:2000;
+  display:flex;flex-direction:column;gap:8px;
+  pointer-events:none;
+}
+.toast-item{
+  background:var(--bg3);border:1px solid var(--green3);
+  color:var(--green);padding:10px 16px;border-radius:2px;
+  font-size:12px;box-shadow:var(--glow);
+  animation:toastIn .2s ease;
+  max-width:320px;
+}
+.toast-item.err{border-color:var(--red2);color:var(--red)}
+.toast-item.warn{border-color:var(--yellow2);color:var(--yellow)}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+
+/* Scrollbar */
+*{scrollbar-width:thin;scrollbar-color:var(--green3) var(--bg)}
+</style>
+</head>
+<body>
+
+<canvas id="matrix-canvas"></canvas>
+
+<!-- ───────── App Shell ───────── -->
+<div id="app">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">⬡ DARKNET</div>
+      <div class="room-code-label">ROOM CODE (click to copy)</div>
+      <div id="room-code-display">—</div>
+      <div class="copy-hint">Share code to invite others</div>
+    </div>
+
+    <div class="section-label">Online Members</div>
+    <div id="members-list"></div>
+
+    <div class="section-label">Encryption Status</div>
+    <div id="crypto-status">
+      <div class="cs-row"><span>AES-256-GCM</span><span class="ok" id="cs-enc">✓ ACTIVE</span></div>
+      <div class="cs-row"><span>HMAC-SHA256</span><span class="ok" id="cs-hmac">✓ ACTIVE</span></div>
+      <div class="cs-row"><span>PBKDF2</span><span class="ok" id="cs-kdf">200K iter</span></div>
+      <div class="cs-row"><span>Key source</span><span class="ok" id="cs-key">Room code</span></div>
+    </div>
+
+    <div class="sidebar-actions">
+      <button class="btn btn-blue" onclick="startCall()">📞 Voice Call</button>
+      <button class="btn btn-yellow" onclick="openReport()">⚠ Report Room</button>
+      <button class="btn btn-red" onclick="confirmLeave()">✕ Leave Room</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="my-codename-label">YOUR CODENAME</div>
+      <div id="my-codename">—</div>
+      <div id="my-session" style="display:none"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+    <div id="chat-header">
+      <div class="header-title">SECURE CHANNEL</div>
+      <span class="enc-badge">🔒 E2E ENCRYPTED</span>
+      <div class="header-meta" id="header-meta">Initializing…</div>
+    </div>
+
+    <div id="messages"></div>
+
+    <!-- Call bar -->
+    <div id="call-bar">
+      <div class="call-status" id="call-status-text">Call connecting…</div>
+      <div class="vol-bar" id="vol-bar">
+        <div class="vol-seg" style="height:4px"></div>
+        <div class="vol-seg" style="height:8px"></div>
+        <div class="vol-seg" style="height:16px"></div>
+        <div class="vol-seg" style="height:8px"></div>
+        <div class="vol-seg" style="height:4px"></div>
+      </div>
+      <div class="call-timer" id="call-timer">00:00</div>
+      <button class="btn btn-red" onclick="endCall()" style="padding:6px 14px;font-size:11px">END</button>
+      <audio id="remote-audio" autoplay></audio>
+    </div>
+
+    <!-- Input -->
+    <div id="input-area">
+      <div class="input-row">
+        <textarea id="msg-input" placeholder="Type an encrypted message…" rows="1" maxlength="4000"></textarea>
+        <button class="btn btn-green" id="send-btn" onclick="sendMessage()">SEND</button>
+      </div>
+      <div class="input-status">
+        <span>⬡ Messages are AES-256-GCM encrypted locally before transmission</span>
+        <span class="char-count" id="char-count">0/4000</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ───────── Modals ───────── -->
+
+<!-- Report -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal modal-yellow">
+    <h2 class="yellow">⚠ SUBMIT REPORT</h2>
+    <p>Reports are reviewed by admins. Your codename will be included.</p>
+    <textarea class="modal-input" id="report-reason" placeholder="Describe the issue…" rows="4"></textarea>
+    <div class="modal-btns">
+      <button class="modal-btn grey" onclick="closeModal('report-modal')">Cancel</button>
+      <button class="modal-btn green" onclick="submitReport()">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin login -->
+<div class="modal-overlay" id="admin-modal">
+  <div class="modal modal-red">
+    <h2 class="red">⬡ ADMIN ACCESS</h2>
+    <p>Enter your administrator key to access the control panel.</p>
+    <input class="modal-input red" id="admin-key-input" type="password" placeholder="Admin key…"/>
+    <div id="admin-login-err" style="color:var(--red);font-size:11px;margin-bottom:8px;display:none">Invalid key.</div>
+    <div class="modal-btns">
+      <button class="modal-btn grey" onclick="closeModal('admin-modal')">Cancel</button>
+      <button class="modal-btn red" onclick="adminLogin()">Authenticate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin panel -->
+<div class="modal-overlay" id="admin-panel-modal">
+  <div class="modal modal-red" id="admin-panel" style="max-width:680px;width:95%">
+    <h2 class="red">⬡ ADMIN PANEL</h2>
+    <p id="admin-panel-meta" style="margin-bottom:8px"></p>
+    <div id="admin-tabs" style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="modal-btn red" onclick="adminTab('reports')" id="tab-reports">Reports</button>
+      <button class="modal-btn grey" onclick="adminTab('rooms')" id="tab-rooms">Active Rooms</button>
+    </div>
+    <div id="admin-content" style="max-height:50vh;overflow-y:auto"></div>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="modal-btn grey" onclick="closeModal('admin-panel-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leave confirm -->
+<div class="modal-overlay" id="leave-modal">
+  <div class="modal">
+    <h2 class="green">Leave Room?</h2>
+    <p>You will be disconnected. Messages are deleted when the room empties.</p>
+    <div class="modal-btns">
+      <button class="modal-btn grey" onclick="closeModal('leave-modal')">Stay</button>
+      <button class="modal-btn red" onclick="leaveRoom()">Leave</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast"></div>
+
+<!-- ───────── Scripts ───────── -->
+<script>
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+let state = {
+  code: null, sessionId: null, codename: null, salt: null,
+  encKey: null, hmacKey: null,
+  lastTs: 0, pollTimer: null,
+  members: [],
+  // webrtc
+  pc: null, localStream: null, callStart: null, callTimer: null,
+  signalPollTimer: null,
+  // admin
+  adminToken: null, adminTabActive: 'reports',
+};
+
+const API = '/api';
+
+// ══════════════════════════════════════════════════════════════
+// MATRIX RAIN
+// ══════════════════════════════════════════════════════════════
+(function(){
+  const canvas = document.getElementById('matrix-canvas');
+  const ctx = canvas.getContext('2d');
+  let cols, drops;
+  const CHARS = '01アウエオカキクケコサシスセソタチツテトナニヌネノ';
+
+  function init(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / 16);
+    drops = Array(cols).fill(1);
+  }
+
+  function draw(){
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#00ff00';
+    ctx.font = '13px Share Tech Mono';
+    drops.forEach((y, i) => {
+      const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+      ctx.fillText(ch, i * 16, y * 16);
+      if (y * 16 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    });
+  }
+
+  init();
+  setInterval(draw, 50);
+  window.addEventListener('resize', init);
+})();
+
+// ══════════════════════════════════════════════════════════════
+// CRYPTO — Web Crypto API
+// ══════════════════════════════════════════════════════════════
+async function deriveKeys(roomCode, saltB64) {
+  const enc = new TextEncoder();
+  const raw = enc.encode(roomCode);
+  const saltBytes = b64ToBytes(saltB64);
+
+  const base = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey', 'deriveBits']);
+
+  // Derive 512 bits: first 256 = encKey, last 256 = hmacKey
+  const bits = await crypto.subtle.deriveBits(
+    { name:'PBKDF2', salt:saltBytes, iterations:200000, hash:'SHA-256' },
+    base, 512
+  );
+
+  const encKeyRaw  = bits.slice(0, 32);
+  const hmacKeyRaw = bits.slice(32, 64);
+
+  const encKey = await crypto.subtle.importKey(
+    'raw', encKeyRaw, { name:'AES-GCM' }, false, ['encrypt','decrypt']
+  );
+  const hmacKey = await crypto.subtle.importKey(
+    'raw', hmacKeyRaw, { name:'HMAC', hash:'SHA-256' }, false, ['sign','verify']
+  );
+
+  return { encKey, hmacKey };
+}
+
+async function encrypt(text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const ct = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv }, state.encKey, enc.encode(text)
+  );
+  const ivB64 = bytesToB64(iv);
+  const ctB64 = bytesToB64(new Uint8Array(ct));
+
+  // Sign iv + ciphertext
+  const sig = await crypto.subtle.sign(
+    'HMAC', state.hmacKey, enc.encode(ivB64 + ctB64)
+  );
+
+  return { ciphertext: ctB64, iv: ivB64, sig: bytesToB64(new Uint8Array(sig)) };
+}
+
+async function decrypt(ciphertext, iv, sig) {
+  const enc = new TextEncoder();
+  // Verify HMAC first
+  const valid = await crypto.subtle.verify(
+    'HMAC', state.hmacKey,
+    b64ToBytes(sig),
+    enc.encode(iv + ciphertext)
+  );
+  if (!valid) return { text: '⚠ [TAMPERED — signature invalid]', tampered: true };
+
+  try {
+    const plain = await crypto.subtle.decrypt(
+      { name:'AES-GCM', iv: b64ToBytes(iv) },
+      state.encKey,
+      b64ToBytes(ciphertext)
+    );
+    return { text: new TextDecoder().decode(plain), tampered: false };
+  } catch {
+    return { text: '⚠ [DECRYPTION FAILED]', tampered: true };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════
+const bytesToB64 = b => btoa(String.fromCharCode(...b));
+const b64ToBytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const $ = id => document.getElementById(id);
+const fmt = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+const fmtSecs = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast-item${type==='err'?' err':type==='warn'?' warn':''}`;
+  el.textContent = msg;
+  $('toast').appendChild(el);
+  setTimeout(() => el.style.transition='opacity .4s', 2200);
+  setTimeout(() => el.style.opacity='0', 2200);
+  setTimeout(() => el.remove(), 2700);
+}
+
+function openModal(id) { $(id).classList.add('open') }
+function closeModal(id) { $(id).classList.remove('open') }
+
+// ══════════════════════════════════════════════════════════════
+// INIT — parse URL and join
+// ══════════════════════════════════════════════════════════════
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('code')?.trim().toUpperCase() || null;
+
+  let res, data;
+  try {
+    res  = await fetch(`${API}/room/join`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code })
+    });
+    data = await res.json();
+  } catch(e) {
+    toast('Cannot reach server. Is the API running?', 'err');
+    return;
+  }
+
+  if (!res.ok) { toast(data.error || 'Join failed', 'err'); return; }
+
+  state.code      = data.code;
+  state.sessionId = data.sessionId;
+  state.codename  = data.codename;
+  state.salt      = data.salt;
+  state.lastTs    = 0;
+
+  // Derive keys
+  const { encKey, hmacKey } = await deriveKeys(data.code, data.salt);
+  state.encKey  = encKey;
+  state.hmacKey = hmacKey;
+
+  // Update URL without reload
+  const newUrl = `${location.pathname}?code=${data.code}`;
+  history.replaceState({}, '', newUrl);
+
+  // UI
+  $('room-code-display').textContent = data.code;
+  $('room-code-display').onclick = () => { navigator.clipboard.writeText(data.code); toast('Room code copied!') };
+  $('my-codename').textContent = data.codename;
+  $('my-session').textContent  = state.sessionId.slice(0,8) + '…';
+
+  renderMembers(data.members);
+  renderMessages(data.messages || []);
+  updateHeaderMeta();
+
+  // Auto-grow textarea
+  const inp = $('msg-input');
+  inp.addEventListener('input', () => {
+    inp.style.height = 'auto';
+    inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+    const n = inp.value.length;
+    const cc = $('char-count');
+    cc.textContent = `${n}/4000`;
+    cc.className = `char-count${n > 3500 ? ' warn' : ''}`;
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // Admin shortcut
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') { e.preventDefault(); openAdminModal(); }
+  });
+
+  // Warn on unload
+  window.addEventListener('beforeunload', () => leaveQuiet());
+
+  // Start polling
+  startPolling();
+}
+
+// ══════════════════════════════════════════════════════════════
+// POLLING
+// ══════════════════════════════════════════════════════════════
+async function poll() {
+  if (!state.code) return;
+  try {
+    const res  = await fetch(`${API}/room/${state.code}?sessionId=${state.sessionId}&after=${state.lastTs}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderMembers(data.members);
+    if (data.messages?.length) {
+      renderMessages(data.messages);
+      const newest = Math.max(...data.messages.map(m => m.ts));
+      if (newest > state.lastTs) state.lastTs = newest;
+    }
+    updateHeaderMeta();
+  } catch {}
+}
+
+function startPolling() {
+  state.pollTimer = setInterval(poll, 1500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════════
+function renderMembers(members) {
+  state.members = members;
+  const el = $('members-list');
+  el.innerHTML = members.map(m => `
+    <div class="member-item${m.codename === state.codename ? ' self' : ''}">
+      <div class="member-dot"></div>
+      <span>${m.codename}${m.codename === state.codename ? ' (you)' : ''}</span>
+    </div>
+  `).join('');
+}
+
+async function renderMessages(msgs) {
+  const container = $('messages');
+  const atBottom = container.scrollHeight - container.clientHeight - container.scrollTop < 60;
+
+  for (const m of msgs) {
+    if (document.getElementById(`msg-${m.id}`)) continue; // skip known
+
+    const div = document.createElement('div');
+    div.id    = `msg-${m.id}`;
+    div.className = 'msg';
+
+    if (m.type === 'system') {
+      div.innerHTML = `<div class="msg-system"><span class="sys-icon">⬡</span>${escHtml(m.text)}</div>`;
+    } else {
+      const isSelf = m.sessionId === state.sessionId;
+      const { text, tampered } = await decrypt(m.ciphertext, m.iv, m.sig);
+
+      div.innerHTML = `
+        <div class="msg-bubble">
+          <div class="msg-header">
+            <span class="msg-name${isSelf ? ' self' : ''}">${escHtml(m.codename)}</span>
+            <span class="msg-time">${fmt(m.ts)}</span>
+            <span class="msg-enc-badge${tampered ? ' tampered' : ''}">${tampered ? '⚠ TAMPERED' : '🔒 ENC'}</span>
+          </div>
+          <div class="msg-text${isSelf ? ' self-text' : ''}${tampered ? ' tampered-text' : ''}">${escHtml(text)}</div>
+        </div>`;
+    }
+    container.appendChild(div);
+  }
+
+  if (atBottom) container.scrollTop = container.scrollHeight;
+}
+
+function updateHeaderMeta() {
+  $('header-meta').textContent = `${state.members.length} member${state.members.length !== 1 ? 's' : ''} online`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════
+// SEND MESSAGE
+// ══════════════════════════════════════════════════════════════
+async function sendMessage() {
+  const input = $('msg-input');
+  const text  = input.value.trim();
+  if (!text || !state.encKey) return;
+
+  const { ciphertext, iv, sig } = await encrypt(text);
+
+  try {
+    const res = await fetch(`${API}/room/message`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code:state.code, sessionId:state.sessionId, ciphertext, iv, sig })
+    });
+    if (!res.ok) { toast('Send failed', 'err'); return; }
+    input.value = '';
+    input.style.height = 'auto';
+    $('char-count').textContent = '0/4000';
+    await poll();
+  } catch { toast('Network error', 'err') }
+}
+
+// ══════════════════════════════════════════════════════════════
+// LEAVE
+// ══════════════════════════════════════════════════════════════
+function confirmLeave() { openModal('leave-modal') }
+
+async function leaveRoom() {
+  await leaveQuiet();
+  location.href = '/';
+}
+
+async function leaveQuiet() {
+  if (!state.code) return;
+  clearInterval(state.pollTimer);
+  clearInterval(state.signalPollTimer);
+  navigator.sendBeacon(`${API}/room/leave`, JSON.stringify({ code:state.code, sessionId:state.sessionId }));
+  state.code = null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// REPORT
+// ══════════════════════════════════════════════════════════════
+function openReport() { $('report-reason').value = ''; openModal('report-modal') }
+
+async function submitReport() {
+  const reason = $('report-reason').value.trim();
+  if (!reason) { toast('Please describe the issue', 'warn'); return; }
+  try {
+    await fetch(`${API}/reports/submit`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code:state.code, reporter:state.codename, reason })
+    });
+    closeModal('report-modal');
+    toast('Report submitted. Thank you.');
+  } catch { toast('Submit failed', 'err') }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════════════════════════════
+function openAdminModal() {
+  $('admin-key-input').value = '';
+  $('admin-login-err').style.display = 'none';
+  openModal('admin-modal');
+}
+
+async function adminLogin() {
+  const key = $('admin-key-input').value.trim();
+  try {
+    const res  = await fetch(`${API}/admin/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (!res.ok) { $('admin-login-err').style.display = 'block'; return; }
+    state.adminToken = data.token;
+    closeModal('admin-modal');
+    await openAdminPanel();
+  } catch { $('admin-login-err').style.display = 'block' }
+}
+
+async function openAdminPanel() {
+  openModal('admin-panel-modal');
+  await adminTab(state.adminTabActive);
+}
+
+async function adminTab(tab) {
+  state.adminTabActive = tab;
+  $('tab-reports').className = `modal-btn ${tab==='reports'?'red':'grey'}`;
+  $('tab-rooms').className   = `modal-btn ${tab==='rooms'  ?'red':'grey'}`;
+
+  const headers = { 'Content-Type':'application/json', 'Authorization':`Bearer ${state.adminToken}` };
+
+  if (tab === 'reports') {
+    const res  = await fetch(`${API}/admin/reports`, { headers });
+    const data = await res.json();
+    $('admin-panel-meta').textContent = `${data.reports.length} total reports`;
+    $('admin-content').innerHTML = `
+      <table class="admin-table">
+        <thead><tr><th>Time</th><th>Room</th><th>Reporter</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+        <tbody>${(data.reports||[]).map(r => `
+          <tr class="${r.reviewed?'reviewed':''}">
+            <td>${fmt(r.ts)}</td>
+            <td style="font-size:10px;color:var(--green3)">${r.roomCode}</td>
+            <td>${escHtml(r.reporter)}</td>
+            <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(r.reason)}</td>
+            <td>${r.reviewed?'<span class="badge-done">✓ DONE</span>':'<span class="badge-open">● OPEN</span>'}</td>
+            <td>${!r.reviewed?`<button class="resolve-btn" onclick="resolveReport('${r.id}')">Resolve</button>`:'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    const res  = await fetch(`${API}/admin/rooms`, { headers });
+    const data = await res.json();
+    $('admin-panel-meta').textContent = `${data.rooms.length} active rooms`;
+    $('admin-content').innerHTML = `
+      <table class="admin-table">
+        <thead><tr><th>Code</th><th>Members</th><th>Messages</th><th>Created</th><th></th></tr></thead>
+        <tbody>${(data.rooms||[]).map(r => `
+          <tr>
+            <td style="color:var(--green3);font-size:10px">${r.code}</td>
+            <td>${r.members}</td><td>${r.messages}</td>
+            <td>${fmt(r.createdAt)}</td>
+            <td><button class="resolve-btn" style="border-color:var(--red2);color:var(--red)" onclick="deleteRoom('${r.code}')">Delete</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+async function resolveReport(id) {
+  await fetch(`${API}/admin/report/${id}/resolve`, {
+    method:'POST', headers:{ 'Authorization':`Bearer ${state.adminToken}` }
+  });
+  await adminTab('reports');
+}
+
+async function deleteRoom(code) {
+  if (!confirm(`Delete room ${code}?`)) return;
+  await fetch(`${API}/admin/room/${code}`, {
+    method:'DELETE', headers:{ 'Authorization':`Bearer ${state.adminToken}` }
+  });
+  await adminTab('rooms');
+}
+
+// ══════════════════════════════════════════════════════════════
+// WEBRTC VOICE
+// ══════════════════════════════════════════════════════════════
+const STUN = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
+
+async function startCall() {
+  if (state.pc) { toast('Call already active', 'warn'); return; }
+  if (state.members.length < 2) { toast('Need at least 2 members for a call', 'warn'); return; }
+
+  try {
+    state.localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
+  } catch { toast('Microphone access denied', 'err'); return; }
+
+  state.pc = new RTCPeerConnection(STUN);
+  state.localStream.getTracks().forEach(t => state.pc.addTrack(t, state.localStream));
+
+  state.pc.ontrack = e => { $('remote-audio').srcObject = e.streams[0] };
+  state.pc.onicecandidate = e => {
+    if (e.candidate) signalSend({ type:'ice', candidate: e.candidate });
+  };
+  state.pc.onconnectionstatechange = () => {
+    const s = state.pc?.connectionState;
+    $('call-status-text').textContent = `Call: ${s}`;
+    if (s === 'connected') startCallTimer();
+    if (s === 'disconnected' || s === 'failed') endCall();
+  };
+
+  // Create offer
+  const offer = await state.pc.createOffer();
+  await state.pc.setLocalDescription(offer);
+  signalSend({ type:'offer', sdp: state.pc.localDescription });
+
+  $('call-bar').classList.add('active');
+  $('call-status-text').textContent = 'Calling…';
+
+  state.signalPollTimer = setInterval(pollSignals, 800);
+  startVolumeMeter();
+  toast('Voice call started');
+}
+
+async function pollSignals() {
+  if (!state.code || !state.pc) return;
+  try {
+    const res  = await fetch(`${API}/room/signal/poll?code=${state.code}&sessionId=${state.sessionId}`);
+    const data = await res.json();
+    for (const { signal } of data.signals||[]) {
+      if (signal.type === 'offer') {
+        if (!state.pc) {
+          state.localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+          state.pc = new RTCPeerConnection(STUN);
+          state.localStream.getTracks().forEach(t => state.pc.addTrack(t, state.localStream));
+          state.pc.ontrack = e => { $('remote-audio').srcObject = e.streams[0] };
+          state.pc.onicecandidate = e => { if(e.candidate) signalSend({type:'ice',candidate:e.candidate}) };
+          $('call-bar').classList.add('active');
+          state.signalPollTimer = setInterval(pollSignals, 800);
+          startVolumeMeter();
+        }
+        await state.pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const answer = await state.pc.createAnswer();
+        await state.pc.setLocalDescription(answer);
+        signalSend({ type:'answer', sdp: state.pc.localDescription });
+      } else if (signal.type === 'answer') {
+        await state.pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      } else if (signal.type === 'ice' && signal.candidate) {
+        try { await state.pc.addIceCandidate(new RTCIceCandidate(signal.candidate)) } catch {}
+      }
+    }
+  } catch {}
+}
+
+async function signalSend(signal) {
+  // Find a target (first other member)
+  const others = state.members.filter(m => m.codename !== state.codename);
+  if (!others.length) return;
+  // Broadcast to all via server (simple approach)
+  await fetch(`${API}/room/signal`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ code:state.code, sessionId:state.sessionId, targetId:'broadcast', signal })
+  });
+}
+
+function endCall() {
+  state.pc?.close(); state.pc = null;
+  state.localStream?.getTracks().forEach(t => t.stop()); state.localStream = null;
+  clearInterval(state.signalPollTimer);
+  clearInterval(state.callTimer);
+  $('call-bar').classList.remove('active');
+  $('remote-audio').srcObject = null;
+  toast('Call ended');
+}
+
+function startCallTimer() {
+  state.callStart = Date.now();
+  state.callTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - state.callStart) / 1000);
+    $('call-timer').textContent = fmtSecs(s);
+  }, 1000);
+}
+
+function startVolumeMeter() {
+  try {
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(state.localStream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 32;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const segs = document.querySelectorAll('.vol-seg');
+    setInterval(() => {
+      if (!state.pc) return;
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((a,b) => a+b, 0) / data.length;
+      segs.forEach((s,i) => {
+        const h = Math.max(2, (avg / 128) * 20 * (0.4 + Math.random() * 0.6));
+        s.style.height = h + 'px';
+      });
+    }, 80);
+  } catch {}
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
