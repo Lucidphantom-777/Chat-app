@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DarkNet Chat — AES-256 Encrypted Messaging</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--bg2:#0f0f0f;--bg3:#141414;
+  --green:#00ff00;--green2:#00cc00;--green3:#007700;--green-dim:#001a00;
+  --blue:#0088ff;--red:#ff0000;--yellow:#ffff00;
+  --text:#ccffcc;--text2:#88aa88;--text3:#446644;
+  --border:rgba(0,255,0,0.15);--border-hi:rgba(0,255,0,0.5);
+  --glow:0 0 12px rgba(0,255,0,0.4);--glow-hi:0 0 24px rgba(0,255,0,0.7);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden}
+
+/* Scanlines */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+  pointer-events:none;z-index:999;
+}
+
+/* Matrix canvas */
+#matrix-canvas{position:fixed;top:0;left:0;width:100%;height:100%;opacity:0.05;pointer-events:none;z-index:0}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 32px;
+  background:rgba(10,10,10,0.9);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(8px);
+}
+.nav-logo{
+  font-family:'Orbitron',monospace;font-size:16px;font-weight:900;
+  color:var(--green);letter-spacing:4px;text-shadow:var(--glow);
+  display:flex;align-items:center;gap:10px;
+}
+.nav-logo svg{width:20px;height:20px;fill:var(--green);filter:drop-shadow(0 0 4px var(--green))}
+.nav-links{display:flex;gap:24px;align-items:center}
+.nav-link{color:var(--text2);text-decoration:none;font-size:12px;letter-spacing:1px;transition:color .2s}
+.nav-link:hover{color:var(--green)}
+
+/* ── HERO ── */
+#hero{
+  position:relative;z-index:1;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:80px 32px 60px;text-align:center;
+}
+.hero-eyebrow{
+  font-size:11px;letter-spacing:4px;color:var(--text3);
+  margin-bottom:24px;text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;
+}
+.eyebrow-line{width:40px;height:1px;background:var(--green3)}
+
+.hero-title{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(36px,7vw,80px);
+  font-weight:900;line-height:1;
+  color:var(--green);text-shadow:var(--glow-hi);
+  letter-spacing:4px;margin-bottom:8px;
+  animation:flickerIn 1.2s ease both;
+}
+@keyframes flickerIn{
+  0%{opacity:0}5%{opacity:.7}10%{opacity:.2}15%{opacity:.9}
+  30%{opacity:.5}50%{opacity:1}100%{opacity:1}
+}
+.hero-sub{
+  font-family:'Orbitron',monospace;
+  font-size:clamp(14px,2vw,20px);
+  color:var(--blue);letter-spacing:6px;margin-bottom:40px;
+  opacity:0;animation:fadeUp .8s .8s ease both;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.hero-desc{
+  max-width:560px;font-size:14px;color:var(--text2);line-height:1.8;
+  margin-bottom:48px;opacity:0;animation:fadeUp .8s 1.1s ease both;
+}
+.hero-desc strong{color:var(--green)}
+
+.hero-cta{
+  display:flex;gap:16px;justify-content:center;flex-wrap:wrap;
+  opacity:0;animation:fadeUp .8s 1.4s ease both;
+}
+
+.btn-primary{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:16px 36px;
+  background:transparent;border:1px solid var(--green);
+  color:var(--green);font-family:'Orbitron',monospace;
+  font-size:13px;font-weight:700;letter-spacing:2px;text-decoration:none;
+  transition:all .2s;position:relative;overflow:hidden;cursor:pointer;
+  text-transform:uppercase;
+}
+.btn-primary::before{
+  content:'';position:absolute;inset:0;
+  background:rgba(0,255,0,0.06);
+  transform:translateX(-100%);transition:transform .2s;
+}
+.btn-primary:hover::before{transform:none}
+.btn-primary:hover{box-shadow:var(--glow-hi);border-color:var(--green2)}
+
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:16px 36px;
+  background:transparent;border:1px solid var(--text3);
+  color:var(--text2);font-family:'Share Tech Mono',monospace;
+  font-size:13px;letter-spacing:1px;text-decoration:none;
+  transition:all .2s;cursor:pointer;text-transform:uppercase;
+}
+.btn-secondary:hover{border-color:var(--text2);color:var(--text)}
+
+/* ── JOIN FORM ── */
+#join-form{
+  margin-top:0;display:flex;flex-direction:column;align-items:center;gap:8px;
+  opacity:0;animation:fadeUp .8s 1.7s ease both;
+}
+.join-label{font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.join-row{display:flex;gap:8px}
+.join-input{
+  background:var(--bg3);border:1px solid var(--border-hi);
+  color:var(--green);font-family:'Orbitron',monospace;font-size:13px;
+  padding:12px 18px;width:260px;outline:none;letter-spacing:2px;
+  transition:border-color .2s,box-shadow .2s;text-transform:uppercase;
+}
+.join-input:focus{border-color:var(--green);box-shadow:var(--glow)}
+.join-input::placeholder{color:var(--text3);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:none}
+.join-btn{
+  padding:12px 24px;background:transparent;
+  border:1px solid var(--green3);color:var(--green);
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  letter-spacing:1px;cursor:pointer;transition:all .2s;text-transform:uppercase;
+}
+.join-btn:hover{background:rgba(0,255,0,0.08);border-color:var(--green);box-shadow:var(--glow)}
+.join-err{font-size:11px;color:var(--red);min-height:16px;transition:all .2s}
+
+/* ── STATS BAR ── */
+.stats-bar{
+  display:flex;gap:40px;justify-content:center;flex-wrap:wrap;
+  padding:32px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:rgba(0,255,0,0.02);
+  position:relative;z-index:1;
+}
+.stat-item{text-align:center}
+.stat-val{font-family:'Orbitron',monospace;font-size:28px;font-weight:900;color:var(--green);text-shadow:var(--glow)}
+.stat-label{font-size:10px;color:var(--text3);letter-spacing:2px;margin-top:4px;text-transform:uppercase}
+
+/* ── FEATURES ── */
+#features{
+  position:relative;z-index:1;
+  padding:80px 32px;max-width:1200px;margin:0 auto;
+}
+.section-header{
+  text-align:center;margin-bottom:60px;
+}
+.section-eyebrow{font-size:10px;letter-spacing:4px;color:var(--text3);text-transform:uppercase;margin-bottom:12px}
+.section-title{font-family:'Orbitron',monospace;font-size:28px;font-weight:700;color:var(--green);text-shadow:var(--glow);letter-spacing:2px}
+
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:1px;
+  border:1px solid var(--border);
+  background:var(--border);
+}
+.feature-card{
+  background:var(--bg2);padding:32px 28px;
+  transition:background .2s;
+  opacity:0;transform:translateY(20px);
+  transition:opacity .5s, transform .5s, background .2s;
+}
+.feature-card.visible{opacity:1;transform:none}
+.feature-card:hover{background:var(--bg3)}
+.feature-icon{
+  font-size:28px;margin-bottom:16px;
+  display:block;
+  filter:drop-shadow(0 0 6px currentColor);
+}
+.feature-name{
+  font-family:'Orbitron',monospace;font-size:13px;font-weight:700;
+  color:var(--green);letter-spacing:1px;margin-bottom:10px;
+}
+.feature-desc{font-size:12px;color:var(--text2);line-height:1.7}
+.feature-tag{
+  display:inline-block;margin-top:12px;
+  font-size:9px;letter-spacing:2px;padding:2px 8px;
+  border:1px solid var(--green3);color:var(--green3);
+  text-transform:uppercase;
+}
+.feature-tag.blue{border-color:rgba(0,136,255,0.4);color:var(--blue)}
+.feature-tag.red{border-color:rgba(255,0,0,0.4);color:var(--red)}
+.feature-tag.yellow{border-color:rgba(255,255,0,0.3);color:var(--yellow)}
+
+/* ── ENCRYPTION FLOW ── */
+#how-it-works{
+  position:relative;z-index:1;
+  padding:80px 32px;
+  background:rgba(0,255,0,0.02);
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+.flow-inner{max-width:860px;margin:0 auto}
+.flow-steps{display:flex;flex-direction:column;gap:0;margin-top:48px}
+.flow-step{
+  display:grid;grid-template-columns:60px 1fr;gap:24px;align-items:start;
+  padding:24px 0;border-bottom:1px solid var(--border);
+  opacity:0;transform:translateX(-20px);
+  transition:opacity .5s,transform .5s;
+}
+.flow-step.visible{opacity:1;transform:none}
+.flow-step:last-child{border-bottom:none}
+.step-num{
+  font-family:'Orbitron',monospace;font-size:32px;font-weight:900;
+  color:var(--green3);text-shadow:0 0 8px var(--green3);
+  line-height:1;padding-top:4px;
+}
+.step-title{font-family:'Orbitron',monospace;font-size:14px;color:var(--green);letter-spacing:1px;margin-bottom:8px}
+.step-desc{font-size:12px;color:var(--text2);line-height:1.8}
+.step-code{
+  font-size:11px;color:var(--green3);background:var(--bg3);
+  border-left:2px solid var(--green3);padding:8px 12px;margin-top:10px;
+  border-radius:0 2px 2px 0;
+}
+
+/* ── CTA BANNER ── */
+#cta{
+  position:relative;z-index:1;
+  text-align:center;padding:80px 32px;
+}
+.cta-title{
+  font-family:'Orbitron',monospace;font-size:32px;font-weight:900;
+  color:var(--green);text-shadow:var(--glow-hi);letter-spacing:3px;
+  margin-bottom:16px;
+}
+.cta-sub{font-size:13px;color:var(--text2);margin-bottom:40px}
+
+/* ── FOOTER ── */
+footer{
+  position:relative;z-index:1;
+  border-top:1px solid var(--border);
+  padding:24px 32px;
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;
+}
+.footer-left{font-size:11px;color:var(--text3)}
+.footer-right{font-size:10px;color:var(--text3);letter-spacing:1px}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+.toast-item{
+  background:var(--bg3);border:1px solid var(--green3);
+  color:var(--green);padding:10px 16px;border-radius:2px;
+  font-size:12px;box-shadow:0 0 8px rgba(0,255,0,0.3);
+  animation:toastIn .2s ease;
+}
+.toast-item.err{border-color:rgba(255,0,0,0.5);color:var(--red)}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+
+@media(max-width:640px){
+  nav{padding:12px 16px}
+  .hero-title{font-size:32px;letter-spacing:2px}
+  .join-input{width:180px}
+  .stats-bar{gap:24px}
+  footer{flex-direction:column;text-align:center}
+}
+</style>
+</head>
+<body>
+
+<canvas id="matrix-canvas"></canvas>
+
+<nav>
+  <div class="nav-logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    DARKNET
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="#features">Features</a>
+    <a class="nav-link" href="#how-it-works">Encryption</a>
+    <a class="nav-link" href="/chat" style="color:var(--green)">Launch Chat →</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div class="hero-eyebrow">
+    <span class="eyebrow-line"></span>
+    AES-256-GCM End-to-End Encrypted
+    <span class="eyebrow-line"></span>
+  </div>
+  <h1 class="hero-title">DARKNET<br>CHAT</h1>
+  <div class="hero-sub">ANONYMOUS · ENCRYPTED · EPHEMERAL</div>
+  <p class="hero-desc">
+    Messages are encrypted <strong>in your browser</strong> before transmission.
+    The server sees only ciphertext. No accounts, no logs, no traces —
+    rooms vanish when empty.
+  </p>
+
+  <div class="hero-cta">
+    <a class="btn-primary" href="/chat">
+      <span>⬡</span> Create New Room
+    </a>
+  </div>
+
+  <div id="join-form">
+    <div class="join-label">— or join existing room —</div>
+    <div class="join-row">
+      <input class="join-input" id="code-input" type="text" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="19" autocomplete="off"/>
+      <button class="join-btn" onclick="joinRoom()">Join →</button>
+    </div>
+    <div class="join-err" id="join-err"></div>
+  </div>
+</section>
+
+<!-- ── STATS ── -->
+<div class="stats-bar">
+  <div class="stat-item"><div class="stat-val">256</div><div class="stat-label">AES Key Bits</div></div>
+  <div class="stat-item"><div class="stat-val">200K</div><div class="stat-label">PBKDF2 Iterations</div></div>
+  <div class="stat-item"><div class="stat-val">12B</div><div class="stat-label">GCM IV Size</div></div>
+  <div class="stat-item"><div class="stat-val">0</div><div class="stat-label">Data Retained</div></div>
+  <div class="stat-item"><div class="stat-val">∞</div><div class="stat-label">Anonymity</div></div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="section-header">
+    <div class="section-eyebrow">Capabilities</div>
+    <div class="section-title">HARDENED BY DESIGN</div>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">🔐</span>
+      <div class="feature-name">AES-256-GCM Encryption</div>
+      <div class="feature-desc">Military-grade symmetric encryption applied client-side. Each message uses a unique 96-bit random IV. The server stores only opaque ciphertext it cannot read.</div>
+      <span class="feature-tag">Web Crypto API</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">✍</span>
+      <div class="feature-name">HMAC-SHA256 Integrity</div>
+      <div class="feature-desc">Every message is signed before sending. Recipients verify the signature before decryption. Tampered messages are detected and flagged with a visible warning.</div>
+      <span class="feature-tag">Tamper Detection</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">🔑</span>
+      <div class="feature-name">PBKDF2 Key Derivation</div>
+      <div class="feature-desc">Encryption and HMAC keys are derived from the room code + server salt using 200,000 PBKDF2 iterations. Keys never leave your device.</div>
+      <span class="feature-tag">200K Iterations</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--blue)">📞</span>
+      <div class="feature-name">WebRTC Voice Calls</div>
+      <div class="feature-desc">Peer-to-peer voice calls via WebRTC with Google STUN servers. Audio travels directly between peers — the server handles only initial signaling.</div>
+      <span class="feature-tag blue">P2P Audio</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">👤</span>
+      <div class="feature-name">Anonymous Codenames</div>
+      <div class="feature-desc">No registration, no email, no phone number. Join instantly with a randomly generated codename like PhantomFox429. You're a ghost.</div>
+      <span class="feature-tag">Zero Registration</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">⬡</span>
+      <div class="feature-name">Ephemeral Rooms</div>
+      <div class="feature-desc">Rooms exist only in server memory. When the last member leaves, all messages and metadata are instantly deleted. No database, no audit trail.</div>
+      <span class="feature-tag">Zero Retention</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--yellow)">⚠</span>
+      <div class="feature-name">Report System</div>
+      <div class="feature-desc">Submit abuse reports that are reviewed by administrators. Admins can close rooms and resolve issues via the protected admin panel.</div>
+      <span class="feature-tag yellow">Moderation</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--red)">🛡</span>
+      <div class="feature-name">Admin Control Panel</div>
+      <div class="feature-desc">Password-protected admin dashboard. View active rooms, review reports, delete rooms, and resolve incidents. Access via Ctrl+Shift+A in the chat.</div>
+      <span class="feature-tag red">Protected Access</span>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon" style="color:var(--green)">🔄</span>
+      <div class="feature-name">Cross-Device Sync</div>
+      <div class="feature-desc">Share a room code and any device can join. The server acts as a relay for ciphertext only — it cannot read your conversations.</div>
+      <span class="feature-tag">Real-Time Polling</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how-it-works">
+  <div class="flow-inner">
+    <div class="section-header">
+      <div class="section-eyebrow">Encryption Flow</div>
+      <div class="section-title">HOW YOUR DATA STAYS PRIVATE</div>
+    </div>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-num">01</div>
+        <div>
+          <div class="step-title">Server Generates Salt</div>
+          <div class="step-desc">When a room is created, the server generates a cryptographically random 32-byte salt unique to that room. This salt is sent to all clients joining the room.</div>
+          <div class="step-code">salt = crypto.randomBytes(32).toString('base64')</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">02</div>
+        <div>
+          <div class="step-title">Client Derives Keys Locally</div>
+          <div class="step-desc">Your browser uses PBKDF2 with 200,000 iterations to derive two 256-bit keys from the room code + salt. An encryption key (AES-256-GCM) and a signing key (HMAC-SHA256). Keys never leave your device.</div>
+          <div class="step-code">PBKDF2(roomCode + salt, 200000 iter) → [encKey | hmacKey]</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">03</div>
+        <div>
+          <div class="step-title">Encrypt Before Sending</div>
+          <div class="step-desc">Each message is encrypted with AES-256-GCM using a freshly generated 96-bit random IV. The ciphertext is then signed with HMAC-SHA256 to create an integrity proof.</div>
+          <div class="step-code">ct = AES-GCM(encKey, randomIV, plaintext) → sign(hmacKey, iv+ct)</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">04</div>
+        <div>
+          <div class="step-title">Server Relays Ciphertext</div>
+          <div class="step-desc">The server stores and relays only the encrypted payload — ciphertext, IV, and HMAC signature. It has no ability to decrypt messages because it never possesses the room code.</div>
+          <div class="step-code">server.store({ ciphertext, iv, sig }) // opaque to server</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">05</div>
+        <div>
+          <div class="step-title">Verify Then Decrypt</div>
+          <div class="step-desc">Recipients first verify the HMAC signature. If valid, AES-GCM decryption proceeds. A failed signature shows a red "TAMPERED" warning — the message was modified in transit.</div>
+          <div class="step-code">if HMAC.verify(sig) → AES-GCM.decrypt(ct) else → WARN: TAMPERED</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section id="cta">
+  <div class="cta-title">READY TO GO DARK?</div>
+  <div class="cta-sub">No account. No logs. No traces. Your conversation disappears when you leave.</div>
+  <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+    <a class="btn-primary" href="/chat">⬡ Open Encrypted Room</a>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-left">⬡ DARKNET CHAT — End-to-End Encrypted Messaging</div>
+  <div class="footer-right">AES-256-GCM · HMAC-SHA256 · WebRTC · Zero Retention</div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+// Matrix rain
+(function(){
+  const canvas = document.getElementById('matrix-canvas');
+  const ctx = canvas.getContext('2d');
+  let cols, drops;
+  const CHARS = '01アウカキクケコサシスセソタチツテ';
+  function init(){
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width/16); drops = Array(cols).fill(1);
+  }
+  function draw(){
+    ctx.fillStyle='rgba(0,0,0,0.05)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#00ff00'; ctx.font='12px Share Tech Mono';
+    drops.forEach((y,i)=>{
+      ctx.fillText(CHARS[Math.floor(Math.random()*CHARS.length)],i*16,y*16);
+      if(y*16>canvas.height&&Math.random()>.975)drops[i]=0; drops[i]++;
+    });
+  }
+  init(); setInterval(draw,55); window.addEventListener('resize',init);
+})();
+
+// Auto-format room code input
+const ci = document.getElementById('code-input');
+ci.addEventListener('input', e => {
+  let v = e.target.value.replace(/[^A-Fa-f0-9]/g,'').toUpperCase();
+  let out = '';
+  for(let i=0;i<v.length&&i<16;i++){
+    if(i>0&&i%4===0)out+='-';
+    out+=v[i];
+  }
+  e.target.value=out;
+});
+ci.addEventListener('keydown', e => { if(e.key==='Enter') joinRoom(); });
+
+function joinRoom(){
+  const code = document.getElementById('code-input').value.trim().toUpperCase();
+  const err  = document.getElementById('join-err');
+  if(!/^[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/.test(code)){
+    err.textContent='Invalid format. Use XXXX-XXXX-XXXX-XXXX'; return;
+  }
+  err.textContent='';
+  window.location.href = `/chat?code=${code}`;
+}
+
+// Scroll reveal
+const observer = new IntersectionObserver(entries=>{
+  entries.forEach((e,i)=>{
+    if(e.isIntersecting){
+      setTimeout(()=>e.target.classList.add('visible'), e.target.dataset.delay||0);
+    }
+  });
+},{threshold:.1});
+
+document.querySelectorAll('.feature-card').forEach((el,i)=>{
+  el.dataset.delay = (i%3)*100; observer.observe(el);
+});
+document.querySelectorAll('.flow-step').forEach((el,i)=>{
+  el.dataset.delay = i*80; observer.observe(el);
+});
+</script>
+</body>
+</html>
