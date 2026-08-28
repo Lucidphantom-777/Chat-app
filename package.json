@@ -1,0 +1,15 @@
+{
+  "name": "darknet-chat",
+  "version": "1.0.0",
+  "description": "AES-256-GCM encrypted anonymous chat",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
